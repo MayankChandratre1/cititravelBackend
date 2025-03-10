@@ -14,7 +14,6 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-dbConnect()
 app.use(express.json());
 app.use(cors({
     origin: '*',
@@ -35,4 +34,6 @@ app.get('/', (req, res) => {
 
 app.listen(PORT,(err,res)=>{
     console.log("Server Listening on port "+PORT);
+    dbConnect()
+
 });
