@@ -1,7 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
-import { connectDB } from './config/db.config.js';
+import dbConnect from './config/db.config.js';
 import sabreRouter from './routes/sabre-routes.js';
 import authRouter from './routes/auth-routes.js';
 import userRouter from './routes/user-router.js';
@@ -14,7 +14,7 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-
+dbConnect()
 app.use(express.json());
 app.use(cors({
     origin: '*',
@@ -35,5 +35,4 @@ app.get('/', (req, res) => {
 
 app.listen(PORT,(err,res)=>{
     console.log("Server Listening on port "+PORT);
-    connectDB();
 });
