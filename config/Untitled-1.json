@@ -1,0 +1,11 @@
+{
+  "id": "F1",
+  "airline": "AI",
+  "fareBasisCode": "WU1YXSII",
+  "fareRule": "DOGD",
+  "fareTariff": "302",
+  "fareType": "XOX",
+  "pricingVendorCode": "ATP",
+  "fareTypeBitmap": "00"
+}
+
