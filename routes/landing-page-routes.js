@@ -1,7 +1,7 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import auth from '../middlewares/admin-middleware.js';
-import dbConnect from '../utils/db.js';
+import dbConnect from '../config/db.config.js';
 
 const router = express.Router();
 
