@@ -16,7 +16,10 @@ const PORT = process.env.PORT || 3000;
 
 
 app.use(express.json());
-app.use(cors())
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+}))
 
 app.use("/api/admin", adminRouter);
 app.use("/api/home", homeRouter);
