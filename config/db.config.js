@@ -13,8 +13,6 @@ const dbConnect = async () => {
 
         // Configure MongoDB options
         const options = {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
             maxPoolSize: 10, // Limit pool size for Vercel serverless
             serverSelectionTimeoutMS: 5000, // Timeout after 5 seconds
             socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
