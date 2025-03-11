@@ -1,37 +1,36 @@
-// Create a utility file for database connection (db.js)
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
+
 dotenv.config();
-const MONGODB_URI = process.env.MONGODB_URI;
 
-if (!MONGODB_URI) {
-  throw new Error('Please define the MONGODB_URI environment variable');
-}
+const dbConnect = async () => {
+    try {
+        const MONGODB_URI = process.env.MONGODB_URI;
+        
+        if (!MONGODB_URI) {
+            throw new Error('Please define MONGODB_URI environment variable');
+        }
 
-let cached = global.mongoose;
+        // Configure MongoDB options
+        const options = {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+            maxPoolSize: 10, // Limit pool size for Vercel serverless
+            serverSelectionTimeoutMS: 5000, // Timeout after 5 seconds
+            socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
+        };
 
-if (!cached) {
-  cached = global.mongoose = { conn: null, promise: null };
-}
+        // Check if we already have a connection
+        if (mongoose.connection.readyState >= 1) {
+            return;
+        }
 
-async function dbConnect() {
-  if (cached.conn) {
-    return cached.conn;
-  }
-
-  if (!cached.promise) {
-    const opts = {
-      bufferCommands: false, // Disable buffering
-      serverSelectionTimeoutMS: 5000, // Reduce server selection timeout
-    };
-
-    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
-      return mongoose;
-    });
-  }
-  
-  cached.conn = await cached.promise;
-  return cached.conn;
-}
+        const conn = await mongoose.connect(MONGODB_URI, options);
+        console.log(`MongoDB connected: ${conn.connection.host}`);
+    } catch (error) {
+        console.error('MongoDB connection error:', error);
+        process.exit(1);
+    }
+};
 
 export default dbConnect;

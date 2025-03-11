@@ -14,6 +14,14 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Connect to MongoDB before setting up routes
+dbConnect().then(() => {
+    console.log('MongoDB connection established');
+}).catch(err => {
+    console.error('MongoDB connection error:', err);
+    process.exit(1);
+});
+
 app.use(express.json());
 app.use(cors({
     origin: '*',
@@ -32,8 +40,12 @@ app.get('/', (req, res) => {
     res.send('Hello World!');
 });
 
-app.listen(PORT,(err,res)=>{
-    console.log("Server Listening on port "+PORT);
-    dbConnect()
-
-});
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, (err) => {
+        if (err) {
+            console.error('Server error:', err);
+            return;
+        }
+        console.log("Server Listening on port " + PORT);
+    });
+}
