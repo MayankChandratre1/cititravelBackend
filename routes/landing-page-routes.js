@@ -49,7 +49,7 @@ router.get('/best-offers', async (req, res) => {
 
 // GET list with pagination for featured properties
 router.get('/featured-properties', async (req, res) => {
-    await handlePaginatedList(req, res, 'FeaturedProperty'); // Fixed typo in "FeturedProperty"
+    await handlePaginatedList(req, res, 'FeturedProperty'); // Fixed typo in "FeturedProperty"
 });
 
 // GET list with pagination for banners
