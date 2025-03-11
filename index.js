@@ -49,3 +49,5 @@ if (process.env.NODE_ENV !== 'production') {
         console.log("Server Listening on port " + PORT);
     });
 }
+
+export default app;
