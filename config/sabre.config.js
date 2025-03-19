@@ -2,13 +2,17 @@
 import dotenv from 'dotenv';
 import axios from 'axios';
 import xml2js from 'xml2js';
+import Guest from '../model/Guest.js';
+import Itinirary from '../model/Itinirary.js';
+import Rental from '../model/Rental.js';
+import { sendPassportReminder } from './email.config.mjs';
 
 dotenv.config();
 
 class SabreAPI {
     constructor() {
-        this.baseURL =  'https://api.havail.sabre.com';
-        // this.baseURL =  'https://api.cert.platform.sabre.com';
+        // this.baseURL =  'https://api.havail.sabre.com';
+        this.baseURL =  'https://api-crt.cert.havail.sabre.com';
         this.credentials = {
             clientId: process.env.SABRE_CLIENT_ID,
             clientSecret: process.env.SABRE_CLIENT_SECRET
@@ -382,71 +386,67 @@ class SabreAPI {
         }
     }
 
-    async createPNR(flightDetails, passengerDetails) {
+    async createPNR(pnrPayload, passengerDetails, billingInfo, additionalData) {
         try {
             const token = await this.getAuthToken();
-            
-            // Construct PNR request payload
+            const { email, name, userId } = billingInfo;
+
+
+            // First create the database record
+            const itinerary = new Itinirary({
+                user: userId,
+                billing: {
+                    cardNumber: billingInfo.paymentMethod.card.last4 || billingInfo.paymentMethod.card.number.slice(-4),
+                    expiryDate: `${billingInfo.paymentMethod.card.exp_month}/${billingInfo.paymentMethod.card.exp_year}`,
+                    cardHolderName: name
+                },
+                address: {
+                    ...billingInfo.address
+                },
+                passengers: passengerDetails.passengers.map(p => ({
+                    ...p,
+                    type: p.type || 'ADT'
+                })),
+                status: 'pending',
+                totalAmount: additionalData.fare.totalFare.totalPrice,
+                currency: additionalData.fare.totalFare.currency,
+                itineraryDetails: additionalData.itinerary,
+                fareDetails: {
+                    baseFare: additionalData.fare.totalFare.baseFareAmount,
+                    taxes: additionalData.fare.totalFare.totalTaxAmount,
+                    validatingCarrier: additionalData.fare.validatingCarrierCode
+                }
+            });
+
+            await itinerary.save();
+
+            // Send passport reminder if international flight
+            const isInternational = pnrPayload.CreatePassengerNameRecordRQ.AirBook.OriginDestinationInformation.FlightSegment.some(
+                segment => {
+                    const origin = segment.OriginLocation.LocationCode;
+                    const destination = segment.DestinationLocation.LocationCode;
+                    return origin.length === 3 && destination.length === 3; // Basic international check
+                }
+            );
+
+            if (isInternational) {
+                try {
+                    await sendPassportReminder(email, name);
+                    console.log('Passport reminder email sent successfully');
+                } catch (emailError) {
+                    console.error('Failed to send passport reminder:', emailError);
+                }
+            }
+
             const payload = {
-                CreatePassengerNameRecordRQ: {
-                    version: "2.4.0",
-                    targetCity: process.env.SABRE_PCC, // Your PCC from env variables
-                    TravelItineraryAddInfo: {
-                        CustomerInfo: {
-                            PersonName: passengerDetails.passengers.map((passenger, index) => ({
-                                NameNumber: `${index + 1}.1`,
-                                GivenName: passenger.firstName,
-                                Surname: passenger.lastName
-                            })),
-                            ContactNumbers: {
-                                ContactNumber: [{
-                                    Phone: passengerDetails.phone,
-                                    PhoneUseType: "H"
-                                }]
-                            },
-                            Email: [{
-                                Address: passengerDetails.email,
-                                Type: "BC"
-                            }]
+                CreatePassengerNameRecordRQ:{
+                    ...pnrPayload.CreatePassengerNameRecordRQ,
+                    targetCity: process.env.SABRE_PCC,
+                    EndTransaction: {
+                        Source: {
+                            ReceivedFrom: "CITITRAVEL API"
                         }
                     },
-                    AirBook: {
-                        RetryRebook: {
-                            Option: true
-                        },
-                        OriginDestinationInformation: {
-                            FlightSegment: flightDetails.segments.map(segment => ({
-                                DepartureDateTime: segment.departureDateTime,
-                                ArrivalDateTime: segment.arrivalDateTime,
-                                FlightNumber: segment.flightNumber,
-                                NumberInParty: passengerDetails.passengers.length.toString(),
-                                ResBookDesigCode: segment.bookingClass,
-                                Status: "NN",
-                                MarketingAirline: {
-                                    Code: segment.airlineCode,
-                                    FlightNumber: segment.flightNumber
-                                },
-                                OriginLocation: {
-                                    LocationCode: segment.origin
-                                },
-                                DestinationLocation: {
-                                    LocationCode: segment.destination
-                                }
-                            }))
-                        }
-                    },
-                    AirPrice: [{
-                        PriceRequestInformation: {
-                            Retain: true,
-                            OptionalQualifiers: {
-                                PricingQualifiers: {
-                                    PassengerType: passengerDetails.passengers.map(passenger => ({
-                                        Code: passenger.type // ADT, CHD, etc.
-                                    }))
-                                }
-                            }
-                        }
-                    }],
                     PostProcessing: {
                         EndTransaction: {
                             Source: {
@@ -463,25 +463,12 @@ class SabreAPI {
                         }
                     }
                 }
-            };
-            
-            // For testing, optionally add test FOP
-            if (process.env.NODE_ENV === 'development') {
-                payload.CreatePassengerNameRecordRQ.FormOfPayment = {
-                    PaymentInfo: {
-                        Payment: {
-                            CC_Info: {
-                                PaymentCard: {
-                                    CardCode: "VI",
-                                    CardNumber: "4111111111111111", // Test card number
-                                    ExpiryDate: "2025-12"
-                                }
-                            }
-                        }
-                    }
-                };
             }
-    
+
+
+            
+
+            // Create PNR with Sabre
             const response = await axios({
                 method: 'post',
                 url: `${this.baseURL}/v2.4.0/passenger/records?mode=create`,
@@ -489,20 +476,45 @@ class SabreAPI {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                data: payload
+                data: pnrPayload
             });
-    
+
+            const pnr = response.data?.CreatePassengerNameRecordRS?.ItineraryRef?.ID;
+            console.dir(response.data, {depth: null});
+            
+
+            if (pnr) {
+                // Update itinerary with PNR
+                await Itinirary.findByIdAndUpdate(itinerary._id, {
+                    pnr,
+                    status: 'confirmed'
+                });
+
+                return {
+                    success: true,
+                    pnr,
+                    itineraryId: itinerary._id,
+                    response: response.data
+                };
+            }
+
+            // If PNR creation failed, mark itinerary as failed
+            await Itinirary.findByIdAndUpdate(itinerary._id, {
+                status: 'failed'
+            });
+
             return {
-                success: true,
-                // pnr: response.data.CreatePassengerNameRecordRS.ItineraryRef.ID,
-                response: response.data
+                success: false,
+                error: 'PNR not created successfully',
+                itineraryId: itinerary._id
             };
-    
+
         } catch (error) {
             console.error('PNR Creation Error:', error.response?.data || error.message);
             return {
                 success: false,
-                error: error.response?.data || error.message
+                error: error.response?.data || error.message,
+                errorCode: error.response?.status
             };
         }
     }
@@ -692,6 +704,247 @@ class SabreAPI {
             return response.data;
         } catch (error) {
             throw new Error(`Hotel search failed: ${error.message}`);
+        }
+    }
+
+    async getHotelDetails(reqPayload){
+        const payload = {
+            HotelPriceCheckRQ:{
+                ...reqPayload.HotelPriceCheckRQ,
+                "POS": {
+                    "Source": {
+            "PseudoCityCode": process.env.SABRE_PCC
+        }
+            },
+            }
+        }
+        try{
+            const token = await this.getAuthToken()
+            const response = await axios.post(`${this.baseURL}/v5/hotel/pricecheck`,payload,{
+                headers:{
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+
+
+            return response.data;
+        }catch(err){
+            console.log("Error in getHotelDetails: ",err);
+        }
+    }
+
+    async createHotelPNR(hotelDetails, guestDetails, reqPayload) {
+        try {
+            const token = await this.getAuthToken();
+
+            // Create Guest record first
+            const guest = new Guest({
+                user: guestDetails.userId,
+                bookingKey: hotelDetails.bookingKey,
+                hotel: {
+                    hotelCode: hotelDetails.hotelCode,
+                    checkIn: hotelDetails.checkIn,
+                    checkOut: hotelDetails.checkOut,
+                    roomType: hotelDetails.roomType,
+                    rateCode: hotelDetails.rateCode
+                },
+                guest: {
+                    firstName: guestDetails.firstName,
+                    lastName: guestDetails.lastName,
+                    email: guestDetails.email,
+                    phone: guestDetails.phone,
+                    address: guestDetails.address
+                },
+                status: 'pending'
+            });
+
+            await guest.save();
+
+            const payload = {
+                CreatePassengerNameRecordRQ: {
+                    ...reqPayload,
+                    targetCity: process.env.SABRE_PCC,
+
+                }
+            };
+
+
+            const response = await axios({
+                method: 'post',
+                url: `${this.baseURL}/v2.5.0/passenger/records?mode=create`,
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                data: payload
+            });
+            console.dir(response.data, {depth: null});
+            
+
+            const pnr = response.data?.CreatePassengerNameRecordRS?.ItineraryRef?.ID;
+
+            if (pnr) {
+                // Update guest record with PNR and status
+                await Guest.findByIdAndUpdate(guest._id, {
+                    pnr,
+                    status: 'confirmed',
+                    payment: {
+                        amount: 0, // Update with actual amount if available
+                        currency: 'USD',
+                        status: 'pending'
+                    }
+                });
+
+                return {
+                    success: true,
+                    pnr,
+                    guestId: guest._id,
+                    response: response.data
+                };
+            }
+
+            // If PNR creation failed, update guest record status
+            await Guest.findByIdAndUpdate(guest._id, {
+                status: 'failed'
+            });
+
+            return {
+                success: false,
+                error: 'PNR not created successfully',
+                guestId: guest._id
+            };
+
+        } catch (error) {
+            console.error('Hotel PNR Creation Error:', error.response?.data || error.message);
+            return {
+                success: false,
+                error: error.response?.data || error.message,
+                errorCode: error.response?.status
+            };
+        }
+    }
+
+    async createVehiclePNR(vehicleDetails, passengerDetails, paymentDetails) {
+        try {
+            const token = await this.getAuthToken();
+
+            const payload = {
+                CreatePassengerNameRecordRQ: {
+                    version: "2.5.0",
+                    targetCity: process.env.SABRE_PCC,
+                    TravelItineraryAddInfo: {
+                        CustomerInfo: {
+                            ContactNumbers: {
+                                ContactNumber: passengerDetails.passengers.map(passenger => ({
+                                    NameNumber: passenger.nameNumber,
+                                    Phone: passenger.phone,
+                                    PhoneUseType: passenger.phoneType || 'H'
+                                }))
+                            },
+                            PersonName: passengerDetails.passengers.map(passenger => ({
+                                NameNumber: passenger.nameNumber,
+                                NameReference: passenger.reference,
+                                PassengerType: passenger.type || 'ADT',
+                                GivenName: passenger.firstName,
+                                Surname: passenger.lastName
+                            }))
+                        }
+                    },
+                    VehicleBook: {
+                        RentalPaymentPrefs: {
+                            GuaranteePrepaid: {
+                                Type: "CC",
+                                PaymentCard: {
+                                    CardCode: paymentDetails.card.brand.toUpperCase().substring(0, 2),
+                                    CardNumber: paymentDetails.card.number,
+                                    ExpiryMonth: paymentDetails.card.expMonth,
+                                    ExpiryYear: paymentDetails.card.expYear,
+                                    FullCardHolderName: {
+                                        LastName: passengerDetails.passengers[0].lastName
+                                    }
+                                },
+                                Text: "GUARANTEE FOR VEHICLE RENTAL"
+                            }
+                        },
+                        VehRentalCore: {
+                            PickUpDate: vehicleDetails.pickUpDate,
+                            PickUpTime: vehicleDetails.pickUpTime,
+                            ReturnDate: vehicleDetails.returnDate,
+                            ReturnTime: vehicleDetails.returnTime
+                        }
+                    },
+                    PostProcessing: {
+                        EndTransaction: {
+                            Source: {
+                                ReceivedFrom: "CITITRAVEL API"
+                            }
+                        },
+                        RedisplayReservation: {}
+                    }
+                }
+            };
+
+            const response = await axios({
+                method: 'post',
+                url: `${this.baseURL}/v2.4.0/passenger/records?mode=create`,
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                data: payload
+            });
+
+            const pnr = response.data?.CreatePassengerNameRecordRS?.ItineraryRef?.ID;
+
+            if (pnr) {
+                // Create Rental record
+                const rental = new Rental({
+                    user: passengerDetails.userId,
+                    pnr,
+                    vehicle: {
+                        pickUpDate: vehicleDetails.pickUpDate,
+                        pickUpTime: vehicleDetails.pickUpTime,
+                        returnDate: vehicleDetails.returnDate,
+                        returnTime: vehicleDetails.returnTime
+                    },
+                    driver: {
+                        firstName: passengerDetails.passengers[0].firstName,
+                        lastName: passengerDetails.passengers[0].lastName,
+                        email: passengerDetails.passengers[0].email,
+                        phone: passengerDetails.passengers[0].phone,
+                        reference: passengerDetails.passengers[0].reference
+                    },
+                    payment: {
+                        amount: vehicleDetails.amount,
+                        currency: vehicleDetails.currency || 'USD',
+                        status: 'pending'
+                    },
+                    status: 'confirmed'
+                });
+
+                await rental.save();
+
+                return {
+                    success: true,
+                    pnr,
+                    rentalId: rental._id,
+                    response: response.data
+                };
+            }
+
+            return {
+                success: false,
+                error: 'PNR not created successfully'
+            };
+
+        } catch (error) {
+            console.error('Vehicle PNR Creation Error:', error.response?.data || error.message);
+            return {
+                success: false,
+                error: error.response?.data || error.message,
+                errorCode: error.response?.status
+            };
         }
     }
 

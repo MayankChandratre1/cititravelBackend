@@ -7,7 +7,7 @@ import authRouter from './routes/auth-routes.js';
 import userRouter from './routes/user-router.js';
 import adminRouter from './routes/admin-routes.js';
 import homeRouter from './routes/landing-page-routes.js';
-import paymentRouter from './routes/payment.routes.js';
+import paymentRouter from './routes/stripe-routes.js';
 import auth from './middlewares/auth-middleware.js';
 
 dotenv.config();

@@ -20,15 +20,12 @@ const passengerSchema = new mongoose.Schema({
     },
     nationality: {
         type: String,
-        required: true
     },
     passportNumber: {
         type: String,
-        required: true
     },
     passportExpiry: {
         type: Date,
-        required: true
     }
 });
 
@@ -96,7 +93,7 @@ const itinirarySchema = new mongoose.Schema({
     },
     pnr: {
         type: String,
-        unique: true
+       
     },
     paymentStatus: {
         type: String,
@@ -113,6 +110,23 @@ const itinirarySchema = new mongoose.Schema({
     currency: {
         type: String,
         default: 'USD'
+    },
+    itineraryDetails: [{
+        departureDate: String,
+        departureLocation: String,
+        arrivalLocation: String
+    }],
+    fareDetails: {
+        baseFare: Number,
+        taxes: Number,
+        validatingCarrier: String
+    },
+    searchParams: {
+        origin: String,
+        destination: String,
+        departureDate: String,
+        cabinClass: String,
+        tripType: String
     }
 });
 
