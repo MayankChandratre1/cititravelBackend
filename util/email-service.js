@@ -62,7 +62,7 @@ class EmailService {
         const mailOptions = {
             from: process.env.SMTP_FROM,
             to,
-            subject: 'Password Reset - CitiTravel',
+            subject: 'Password Reset - CitiTraveler\'s',
             html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                     <h2>Password Reset Request</h2>
@@ -81,14 +81,14 @@ class EmailService {
         const mailOptions = {
             from: process.env.SMTP_FROM,
             to,
-            subject: 'Passport Details Required - CitiTravel',
+            subject: 'Passport Details Required - CitiTraveler\'s',
             html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                     <h2>Hello ${name},</h2>
                     <p>Please remember to update your passport details for your upcoming trip.</p>
                     <p>You can do this by:</p>
                     <ol>
-                        <li>Logging into your CitiTravel account</li>
+                        <li>Logging into your CitiTraveler\'s account</li>
                         <li>Going to "My Bookings"</li>
                         <li>Selecting your booking</li>
                         <li>Click on "Update Passport Details"</li>
