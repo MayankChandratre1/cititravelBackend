@@ -143,6 +143,18 @@ router.post('/createpnr', auth, async (req, res) => {
     }
 })
 
+router.post('/updatepnr',auth, async (req, res) => {
+    const data = req.body;
+    
+    try {
+        const result = await sabre.updatePNR(data);
+        res.json(result);
+    } catch (error) {
+        
+        res.status(500).json({ error: error.message });
+    }
+})
+
 
 router.post('/ancillary', async (req, res) => {
     const data = req.body;

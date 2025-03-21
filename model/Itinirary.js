@@ -127,6 +127,9 @@ const itinirarySchema = new mongoose.Schema({
         departureDate: String,
         cabinClass: String,
         tripType: String
+    },
+    payload: {
+        type: String,
     }
 });
 

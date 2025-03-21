@@ -415,7 +415,8 @@ class SabreAPI {
                     baseFare: additionalData.fare.totalFare.baseFareAmount,
                     taxes: additionalData.fare.totalFare.totalTaxAmount,
                     validatingCarrier: additionalData.fare.validatingCarrierCode
-                }
+                },
+                payload: JSON.stringify(pnrPayload)
             });
 
             await itinerary.save();
@@ -517,6 +518,69 @@ class SabreAPI {
                 errorCode: error.response?.status
             };
         }
+    }
+
+    async updatePNR(data){
+        try{
+
+            const it = await Itinirary.findById(data.itineraryId);
+            const token = await this.getAuthToken();
+            const pnrPayload = JSON.parse(it.payload);
+            const TravelItineraryAddInfo = pnrPayload.CreatePassengerNameRecordRQ.TravelItineraryAddInfo
+
+            const payload = {
+                "UpdatePassengerNameRecordRQ":{
+                    "targetCity": process.env.SABRE_PCC,
+                    "Itinerary":{
+                        "id": it.pnr
+                    },
+                    "SpecialReqDetails":{
+                        "SpecialService":{
+                            "SpecialServiceInfo":{
+                                "AdvancePassenger":[
+                                    ...data.data.map(dt => (
+                                        {
+                                            "Document":{
+                                                "Type":"P",
+                                                "Number":dt.passportNumber.toString(),
+                                                "IssueCountry":dt.nationality,
+                                                "ExpirationDate":dt.passportExpiry
+                                            }
+                                        }
+                                    ))
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+
+            
+            
+            const response = await axios({
+                method: 'post',
+                url: `${this.baseURL}/v1.2.0/passenger/records?mode=update`,
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                data:payload
+            });
+            
+            console.dir(response.data,{depth:null});
+
+            return response.data;
+            
+
+        } catch (error) {
+        console.error('PNR Updation Error:', error.response?.data || error.message);
+        console.dir(error.response.data,{depth:null});
+        return {
+            success: false,
+            error: error.response?.data || error.message,
+            errorCode: error.response?.status
+        };
+    }
     }
 
     async getBaggageOptions(flightDetails, passengerDetails = [], pnr) {

@@ -20,10 +20,10 @@ class EmailService {
         const mailOptions = {
             from: process.env.SMTP_FROM,
             to,
-            subject: 'Verify Your Email - CitiTravel',
+            subject: 'Verify Your Email - CitiTraveler\'s',
             html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <h2>Welcome to CitiTravel!</h2>
+                    <h2>Welcome to CitiTraveler\'s!</h2>
                     <p>Please verify your email address by entering this code:</p>
                     <h1 style="color: #4CAF50; text-align: center; font-size: 32px;">${verificationCode}</h1>
                     <p>This code will expire in 10 minutes.</p>
@@ -39,11 +39,11 @@ class EmailService {
         const mailOptions = {
             from: process.env.SMTP_FROM,
             to,
-            subject: 'Booking Confirmation - CitiTravel',
+            subject: 'Booking Confirmation - CitiTraveler\'s',
             html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                     <h2>Booking Confirmation</h2>
-                    <p>Thank you for booking with CitiTravel!</p>
+                    <p>Thank you for booking with CitiTraveler\'s!</p>
                     <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px;">
                         <h3>Booking Details:</h3>
                         <p><strong>PNR:</strong> ${bookingDetails.pnr}</p>
